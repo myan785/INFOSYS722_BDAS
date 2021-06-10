@@ -1,0 +1,11 @@
+﻿age,gender,occupation,donation_frequency,donation_start_date,is_credit_card,amount,is_instant_pay,is_email_verified,is_address_verified,sign_up_date,sign_up_channel,is_cancel
+26,Female,Developer,Monthly,20/01/2021,1,35,0,1,1,20/01/2021,Street,0
+31,Female,Hospitality Worker,Monthly,21/01/2021,0,30,0,1,1,21/01/2021,Door to Door,0
+39,Male,IT Professional,Monthly,22/01/2021,1,30,0,1,1,22/01/2021,Door to Door,0
+22,Male,IT Professional,Monthly,23/01/2021,0,25,0,1,1,23/01/2021,Door to Door,0
+30,Male,Chef,Monthly,24/01/2021,1,38,0,1,1,24/01/2021,Door to Door,0
+35,Female,Other,Monthly,25/01/2021,1,38,0,1,1,25/01/2021,Door to Door,1
+31,Male,IT Professional,Monthly,26/01/2021,1,30,0,1,1,26/01/2021,Door to Door,1
+38,Female,Finance Controller,Monthly,27/01/2021,1,30,0,1,1,27/01/2021,Street,0
+28,Female,Banking & Finance,Monthly,28/01/2021,1,30,0,1,1,28/01/2021,Street,0
+27,Male,Arquitect,Monthly,29/01/2021,1,25,0,1,1,29/01/2021,Street,0
