@@ -621,7 +621,7 @@ final_data = output_fixed.select("features",'IsCancelIndex')
 train_data,test_data = final_data.randomSplit([0.8,0.2])
 
 
-# In[54]:
+# In[45]:
 
 
 # Import the DecisionTree 
@@ -632,7 +632,7 @@ dt_gini = DecisionTreeClassifier(labelCol='IsCancelIndex',featuresCol='features'
 dt_entropy = DecisionTreeClassifier(labelCol='IsCancelIndex',featuresCol='features', impurity='entropy')
 
 
-# In[72]:
+# In[46]:
 
 
 #Import the LogsticRegression
@@ -656,7 +656,7 @@ rf_gini = RandomForestClassifier(labelCol='IsCancelIndex',featuresCol='features'
 rf_entropy = RandomForestClassifier(labelCol='IsCancelIndex',featuresCol='features', impurity='entropy')
 
 
-# In[95]:
+# In[48]:
 
 
 #Import MultilayerPerception
@@ -670,7 +670,7 @@ mlp_iter2 = MultilayerPerceptronClassifier(labelCol='IsCancelIndex',featuresCol=
                                            ,solver='l-bfgs',maxIter=200, layers=layers)
 
 
-# In[65]:
+# In[49]:
 
 
 #Train the DecisioTree Model
@@ -696,7 +696,7 @@ print("Decision Tree (gini) has an accuracy of {0:2.2f}%".format(dt_gini_acc*100
 print("Decision Tree (entropy) has an accuracy of {0:2.2f}%".format(dt_entropy_acc*100))
 
 
-# In[74]:
+# In[50]:
 
 
 #Train the LogisticRegression Model
@@ -718,7 +718,7 @@ print("Logistic Regression (l2 & iter=100) has an accuracy of {0:2.2f}%".format(
 print("Logistic Regression (l2 & iter=150) has an accuracy of {0:2.2f}%".format(lr_l1_iter1_acc*100))
 
 
-# In[75]:
+# In[51]:
 
 
 #Train the RandomForestModel
@@ -738,7 +738,7 @@ print("Random Forest Tree (gini) has an accuracy of {0:2.2f}%".format(rf_gini_ac
 print("Random Forest Tree (entropy) has an accuracy of {0:2.2f}%".format(rf_entropy_acc*100))
 
 
-# In[96]:
+# In[52]:
 
 
 #Train the MultilayerPerceptron
@@ -756,13 +756,13 @@ print("MLP (iter=100) has an accuracy of {0:2.2f}%".format(mlp_iter1_acc*100))
 print("MLP (iter=200) has an accuracy of {0:2.2f}%".format(mlp_iter2_acc*100))
 
 
-# In[100]:
+# In[53]:
 
 
 rf_gini_model.featureImportances
 
 
-# In[105]:
+# In[54]:
 
 
 def ExtractFeatureImp(featureImp, dataset, featuresCol):
@@ -776,8 +776,173 @@ def ExtractFeatureImp(featureImp, dataset, featuresCol):
 ExtractFeatureImp(lr_l1_iter1_model.coefficients, dt_gini_predictions, "features").head(10)
 
 
-# In[106]:
+# In[55]:
 
 
 ExtractFeatureImp(rf_gini_model.featureImportances, dt_gini_predictions, "features").head(10)
+
+
+# In[56]:
+
+
+from yellowbrick.features import rank2d
+
+visualizer = rank2d(pandaDf)
+
+
+# In[62]:
+
+
+from yellowbrick.features import RadViz
+
+features = ["age","gender","donation_frequency","amount","is_address_verified","sign_up_channel","is_info_verified",
+           "is_credit_card","is_email_verified","is_instant_pay"]
+
+classes = ["not canceled","cancel"]
+
+X = pandaDf[features]
+y = pandaDf.is_cancel
+
+# Instantiate the visualizer
+visualizer = RadViz(classes=classes,features=features)
+ 
+visualizer.fit(X,y)
+visualizer.transform(X)
+visualizer.poof()
+
+
+# In[66]:
+
+
+#ROC Curves for Logistic Regression 
+plt.figure(figsize=(5,5))
+plt.plot([0, 1], [0, 1], 'r--')
+plt.plot(lr_l1_iter1_model.summary.roc.select('FPR').collect(),
+         lr_l1_iter1_model.summary.roc.select('TPR').collect())
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curves for Logistic Regression')
+plt.show()
+
+
+# In[70]:
+
+
+from pyspark.mllib.evaluation import BinaryClassificationMetrics
+
+# Scala version implements .roc() and .pr()
+# Python: https://spark.apache.org/docs/latest/api/python/_modules/pyspark/mllib/common.html
+# Scala: https://spark.apache.org/docs/latest/api/java/org/apache/spark/mllib/evaluation/BinaryClassificationMetrics.html
+class CurveMetrics(BinaryClassificationMetrics):
+    def __init__(self, *args):
+        super(CurveMetrics, self).__init__(*args)
+
+    def _to_list(self, rdd):
+        points = []
+        # Note this collect could be inefficient for large datasets 
+        # considering there may be one probability per datapoint (at most)
+        # The Scala version takes a numBins parameter, 
+        # but it doesn't seem possible to pass this from Python to Java
+        for row in rdd.collect():
+            # Results are returned as type scala.Tuple2, 
+            # which doesn't appear to have a py4j mapping
+            points += [(float(row._1()), float(row._2()))]
+        return points
+
+    def get_curve(self, method):
+        rdd = getattr(self._java_model, method)().toJavaRDD()
+        return self._to_list(rdd)
+
+#ROC Curves for Random Forest
+preds = rf_gini_predictions.select('IsCancelIndex','probability').rdd.map(lambda row: (float(row['probability'][1]), float(row['IsCancelIndex'])))
+points = CurveMetrics(preds).get_curve('roc')
+
+plt.figure()
+x_val = [x[0] for x in points]
+y_val = [x[1] for x in points]
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curves for Random Forest')
+plt.plot(x_val, y_val)
+
+
+# In[71]:
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+import itertools
+
+def plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+
+# In[93]:
+
+
+from sklearn.metrics import confusion_matrix
+y_true = lr_l1_iter1_predictions.select("IsCancelIndex")
+y_true = y_true.toPandas()
+
+y_pred = lr_l1_iter1_predictions.select("prediction")
+y_pred = y_pred.toPandas()
+
+cnf_matrix = confusion_matrix(y_true, y_pred,labels=[0.0,1.0])
+cnf_matrix
+
+# Plot non-normalized confusion matrix
+plt.figure()
+plot_confusion_matrix(cnf_matrix, classes=['not cancel','cancel'],
+                      title='LogisticRegression Confusion Matrix')
+plt.show()
+
+
+# In[94]:
+
+
+y_true = rf_gini_predictions.select("IsCancelIndex")
+y_true = y_true.toPandas()
+
+y_pred = rf_gini_predictions.select("prediction")
+y_pred = y_pred.toPandas()
+
+cnf_matrix = confusion_matrix(y_true, y_pred,labels=[0.0,1.0])
+cnf_matrix
+
+# Plot non-normalized confusion matrix
+plt.figure()
+plot_confusion_matrix(cnf_matrix, classes=['not cancel','cancel'],
+                      title='RandomForest Confusion Matrix')
+plt.show()
 
